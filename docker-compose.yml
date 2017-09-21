@@ -1,0 +1,67 @@
+version: '2'
+
+# TODO: use docker secret if possible
+# TODO: make mariadb automatically create database for drone
+# TODO: make drone use mysql database
+
+services:
+  gogs:
+    image: gogs/gogs:0.11.29
+    restart: unless-stopped
+    depends_on:
+      - mariadb
+    environment:
+      SOCAT_LINK: 0
+      RUN_CROND: 1
+    ports:
+      - "10022:22"
+      - "10080:3000"
+    volumes:
+      - "gogs:/data"
+  
+  mariadb:
+    image: mariadb:10.1
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: gogs
+      MYSQL_USER: gogs
+      MYSQL_PASSWORD: gogs
+      MYSQL_ROOT_PASSWORD: somethingrandomandhardtoguess
+    volumes:
+      - "mariadb:/var/lib/mysql"
+
+  drone-server:
+    image: drone/drone:0.7
+    ports:
+      - 8000:8000
+    volumes:
+      - "drone:/var/lib/drone/"
+    restart: unless-stopped
+    environment:
+      DRONE_OPEN: "true"
+      DRONE_SECRET: drone
+      DRONE_GOGS: "true"
+      DRONE_GOGS_URL: http://gogs:3000/
+      DRONE_GOGS_PRIVATE_MODE: "true"
+      DRONE_GOGS_SKIP_VERIFY: "true"
+
+  drone-agent:
+    image: drone/drone:0.7
+    command: agent
+    restart: unless-stopped
+    depends_on:
+      - drone-server
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      DRONE_SERVER: ws://drone-server:8000/ws/broker
+      DRONE_SECRET: drone
+
+
+volumes:
+  gogs:
+    external: true
+  mariadb:
+    external: true
+  drone:
+    external: true
